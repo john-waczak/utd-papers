@@ -62,38 +62,38 @@
 ## Unsupervised Classification of Hyperspectral Imagery for Rapid Characterization of Novel Environments with Autonomous Robotic Teams 
 ### K-means 
 ### Self Organizing Maps
-    - fit an SOM model to the data 
-    - for each pixel in entire map, assign best matching unit (use distinguishable colors for a $10\times 10$ or $25\times 25$ SOM grid)
-    - For class, investigate the learned "spectrum" representation and compare against known chemical spectra. 
-      - is there a database we could try to use to look up possible species in the reflectance spectra? 
+- fit an SOM model to the data 
+- for each pixel in entire map, assign best matching unit (use distinguishable colors for a $10\times 10$ or $25\times 25$ SOM grid)
+- For class, investigate the learned "spectrum" representation and compare against known chemical spectra. 
+  - is there a database we could try to use to look up possible species in the reflectance spectra? 
 ### Generative Topographic Mapping 
 
 ## Spectral Indices for Rapid HSI Surveys: Unsupervised and Supervised Methods via SciML
-    - Apply to PROSPECT database as a simple test case 
-    - Apply to our own Data 
-      - [Mutliple Endmember Spectral Mixture Analysis](https://aviris.jpl.nasa.gov/proceedings/workshops/99_docs/46.pdf)
-      - generalize **Spectral Unmixing Models** unmixing models... with gaussian process we could think of an infinite basis of gaussians describing "peaks" in the spectrum". Can we try to kernelize this procedure?
+- Apply to PROSPECT database as a simple test case 
+- Apply to our own Data 
+  - [Mutliple Endmember Spectral Mixture Analysis](https://aviris.jpl.nasa.gov/proceedings/workshops/99_docs/46.pdf)
+  - generalize **Spectral Unmixing Models** unmixing models... with gaussian process we could think of an infinite basis of gaussians describing "peaks" in the spectrum". Can we try to kernelize this procedure?
 
 ## Synthetic Data Generation for Hyperspectral Imaging with Autonomous Robotic Teams
-    - Variational Autoencoders 
-    - Group transformations, e.g. rotations, reflections, translations, cropping, etc... (do these make sense if boat data is point observation) 
-    - Advanced sampling methods for regions with 
+- Variational Autoencoders 
+- Group transformations, e.g. rotations, reflections, translations, cropping, etc... (do these make sense if boat data is point observation) 
+- Advanced sampling methods for regions with 
 
 ## Uncertainty Quantification via $\partial P$.
-    - Categorize Methods into two categories: 
-      - quantifying uncertainty in collected data 
-      - quantifying model uncertainty
-    - Conformal Prediction (we have a NN code for doing this in flux. Just need to apply it)
-    - Representativeness Uncertainty i.e. when georectifying HSI images and reducing spatial extend via `ilat` and `ilon` settings, also compute the stdev for each grainy pixel
-    - Measurements.jl *forward mode* once we have the representativeness uncertainty. 
-    - Need a way to quantify uncertainty from Boat sensors... 
-    - Sensativity Analysis with w/ automatic differentiation
-    
+- Categorize Methods into two categories: 
+  - quantifying uncertainty in collected data 
+  - quantifying model uncertainty
+- Conformal Prediction (we have a NN code for doing this in flux. Just need to apply it)
+- Representativeness Uncertainty i.e. when georectifying HSI images and reducing spatial extend via `ilat` and `ilon` settings, also compute the stdev for each grainy pixel
+- Measurements.jl *forward mode* once we have the representativeness uncertainty. 
+- Need a way to quantify uncertainty from Boat sensors... 
+- Sensativity Analysis with w/ automatic differentiation
+
 
 # Technical Notes 
 ## Real Time Georectification of Drone Based Imagery
-    - Georectification of pushbroom HSI 
-    - Georectifcation of  square visible + thermal FLIR imagery
+- Georectification of pushbroom HSI 
+- Georectifcation of  square visible + thermal FLIR imagery
 
 ## Self Organizing Maps 
 ## Bayesian Optimization with Gaussian Process Regression
