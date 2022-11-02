@@ -1,11 +1,11 @@
 # RobotTeam Papers 
 ## Robot Team II: Electric Boogaloo (title w.i.p.)
-    - Discuss real time georectification, generation of reflectance data, etc... 
-    - Combine Multiple days of observations
-    - Discuss need for both viewing geometry and solar geometry 
-      - make reference to highly nonuniform reflectance as a function of incident angle 
-      - make reference to Beer's law as justification for direct determination of concentration of concentration from spectra 
-      - in depth discussion of fluorometers (maybe save this for the dissertation)
+- Discuss real time georectification, generation of reflectance data, etc... 
+- Combine Multiple days of observations
+- Discuss need for both viewing geometry and solar geometry 
+  - make reference to highly nonuniform reflectance as a function of incident angle 
+  - make reference to Beer's law as justification for direct determination of concentration of concentration from spectra 
+  - in depth discussion of fluorometers (maybe save this for the dissertation)
 
 ### Previous outline: 
 1. Introduction
