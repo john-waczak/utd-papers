@@ -7,58 +7,6 @@
   - make reference to Beer's law as justification for direct determination of concentration of concentration from spectra 
   - in depth discussion of fluorometers (maybe save this for the dissertation)
 
-### Previous outline: 
-1. Introduction
-   - Human Impact / Importance 
-   - Hyperspectral Imaging and Remote sensing
-     - Satellites with HSI 
-     - Drones with HSI 
-     - applications 
-       - Spectral Indices + Vegetation Studies
-       - Machine Learning with HSI
-   - Remote Sensing applications to characterization of bodies of water
-     - meteorology 
-     - atmospheric sensing 
-     - need for in-istu sensing
-   - Autonomous Robotic Teams 
-     - coordination
-     - autonomous data collection 
-2. Materials & Methods 
-   - Robotic Team 
-   - Fluorometers (technology and our included sensors)
-   - Data collection procedure
-     - AV -> Boat -> AV -> Maps -> Verification w/ Boat
-   - Software 
-     - Julia & MLJ
-     - Docker + Influxdb + NodeRed + Grafana for live visualizations
-   - Processing of HSIs 
-     - radiance + downwelling irradiance -> reflectances 
-       - assumption of *Lambertian* surface
-     - georectification 
-       - georectification = orthorectify + georeference
-     - Other important variables 
-       - Viewing geometry (roll, pitch, yaw)
-       - Solar geometry i.e. incident geometry (solar azimuth, solar elevation)
-         - should visualize this... see the [wikipedia image](https://en.wikipedia.org/wiki/Solar_zenith_angle#/media/File:Solar_Zenith_Angle_min.png)
-       - mention grazing incidence reflection and ideal time for data collection
-     - Data Collocation procedure 
-       - `ilat`, `ilon` and representativeness uncertainty
-     - Machine Learning Methods 
-       - Individual learners 
-       - Feature importance ranking 
-         - discuss pros/cons and mentions that Shapley values take too long to compute to be helpful here 
-       - Hyperparameter optimization
-       - Super learner / Model stacking 
-         - discuss training on complimentary folds
-       - MLJ model search and data pipeline (i.e. learning networks and DAGs)
-         - we should make a graph to visualize the data pipeline for the superlearner stack 
-3. Results 
-   - Exploratory Data Analysis results 
-   - Combining multiple days of data (i.e. the difference between this and the previous paper)
-   - Comparison of vanilla models, hpo models and super learner
-   - Updated maps of Scotty's ranch 
-4. Discussion
-
 ## Unsupervised Classification of Hyperspectral Imagery for Rapid Characterization of Novel Environments with Autonomous Robotic Teams 
 ### K-means 
 ### Self Organizing Maps
@@ -90,11 +38,121 @@
 - Sensativity Analysis with w/ automatic differentiation
 
 
+# Super Resolution 
+## Cloud & Shadow Mask for Sentinel-2
+### ML Type 
+- Supervised Classification 
+### ML Methods 
+- Single Pixel w/ Tree Based Methods 
+- Deep NN with Convolutional Layers
+### Features 
+- Sentinel 2 Multi-band Imagery 
+- Land Type 
+- Viewing Geometry 
+- Solar Geometry
+### Targets
+- Sentinel 2 Cloud Mask + Cloud Shadow Mask
+
+## Cloud & Shadow Fill 
+### ML Type 
+- supervised regression
+### ML Methods 
+- pixel based (Would it make sense to do something else here?)
+### Features 
+- Sentinel 2 Multi-band Imagery 
+- Sentinel 2 Cloud Mask & Cloud Shadow Mask 
+- Sentinel 1 SAR Variables (GRD or SLC or both?)
+- 10 m Digital Elevation Map
+- Viewing Geometry 
+- Solar Geometry
+- Land Type
+### Targets
+- *Cloudless & Shadowless* Sentinel 2 Multi-band imagery 
+
+## Sentinel 2 RGB *Spatial* Super Resolution 
+### ML Type 
+- Supervised Regression
+### ML Methods 
+- This has to be a Deep NN method using convolution to get the upsampling. I don't think we can do this with pixel based models (using tree methods)
+- Probably should use a GAN
+### Features
+- High (spatial) Resolution NAIP RGB Image
+- Sentinel 2 Multi-band Imagery 
+- Sentinel 1 SAR Variables (GRD or SLC or both?)
+- 10 m Digital Elevation Map
+- Viewing Geometry 
+- Solar Geometry
+- Land Type
+### Targets
+- Sentinel RGB Bands @ NAIP Resolution
+### Loss Function Terms
+### Notes 
+We could make a model that uses all 3 bands (RGB) simultaneously, or we can make a model for a single band that we validate against R, G, and B bands individually. This has the added perc of increasing the training samples. This will be much easier to then apply to *all* bands of the sentinel imagery (and perhaps Sentinel 1, etc...)  independently. We could try: 
+- Red, Green, Blue bands separately 
+- Black and White converted RGB image
+- Data Augmentation via Scaling / Rotation / Reflection
+
+## Sentinel 2 Multiband *Spatial* Super Resolution 
+### ML Type 
+- Supervised Regression
+### ML Methods 
+- This has to be a Deep NN method using convolution to get the upsampling. I don't think we can do this with pixel based models (using tree methods)
+- Probably should use a GAN
+### Features
+- High (spatial) Resolution NAIP RGB Image
+- Sentinel 2 Multi-band Imagery 
+- Sentinel 1 SAR Variables (GRD or SLC or both?)
+- 10 m Digital Elevation Map
+- Viewing Geometry 
+- Solar Geometry
+- Land Type
+### Targets
+- Sentinel RGB Bands @ NAIP Resolution
+### Loss Function Terms
+
+
+## Sentinel 2 Multiband *Spectral* Super Resolution
+### ML Type 
+- Supervised Regression
+### ML Methods 
+- This can be pixel based
+### Features
+- Sentinel 2 Multi-band Imagery 
+- Sentinel 1 SAR Variables (GRD or SLC or both?)
+- 10 m Digital Elevation Map
+- Viewing Geometry 
+- Solar Geometry
+- UAV Hyperspectral Image
+### Targets
+- Sentinel *Hyperspectral*  Imagery (i.e. Sentinel at all HSI Bands)
+### Loss Function Terms
+
+
+# Chemical Data Assimilation & ActivePure Work
+## ActivePure Research Lab
+- Overview of all sensor in sensor matrix 
+- Overview of measurement capabilities (list of species, uncertainty levels, etc...)
+- Overview of containerized data acquisition pipeline 
+  - NodeRed 
+  - InfluxDB 
+  - Grafana 
+  - Quarto
+  - Automatic Alerts 
+  - Automatic Reports
+
+## Kinetics and Chemical Data Assimilation 
+- MCM Implementation in Julia 
+- Direct computation of Photolysis rates 
+- Combination with Dr. Lary's AutoChem 
+- Addition of Ion Chemistry from MIT Lightning disseration
+- Visualization of chemical cycles
+- SciML methods to infer below detection limits
+
 # Technical Notes 
 ## Real Time Georectification of Drone Based Imagery
 - Georectification of pushbroom HSI 
 - Georectifcation of  square visible + thermal FLIR imagery
-
 ## Self Organizing Maps 
 ## Bayesian Optimization with Gaussian Process Regression
+## Gaussian Process Regression / Classification in MLJ
 ## Solar Geometry? (probably not necessary)
