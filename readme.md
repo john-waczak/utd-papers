@@ -8,13 +8,22 @@
   - in depth discussion of fluorometers (maybe save this for the dissertation)
 
 ## Unsupervised Classification of Hyperspectral Imagery for Rapid Characterization of Novel Environments with Autonomous Robotic Teams 
-### K-means 
+### K-means / Fuzzy K-means
 ### Self Organizing Maps
 - fit an SOM model to the data 
 - for each pixel in entire map, assign best matching unit (use distinguishable colors for a $10\times 10$ or $25\times 25$ SOM grid)
 - For class, investigate the learned "spectrum" representation and compare against known chemical spectra. 
   - is there a database we could try to use to look up possible species in the reflectance spectra? 
 ### Generative Topographic Mapping 
+### analysis ideas
+- The nice feature of both the SOM and the GTM is we can reinterpret them to be spectral-unmixing models. Each SOM node has a feature vector of identical length to the input vector. Similarly, the mean projection $y(x;W)$ in GTM represents the center of a gaussian in *data space*. Thus, we can reinterpret these feature vectors and gaussian centers as representative endmember spectra for the dataset. Further, the topographic properties of these methods ensure we have similarity between classes (at least in the latent space). For the GTM we are guarenteed that the data space projections of our GTM nodes will be similar. **We should see if this holds for SOM**. We can also interpret the cluster means from K-means as our endmembers. 
+- For SOM and GTM once we have fit the models, we can look at the map of "winning nodes" (BMU for SOM and Mean for GTM) and perform a secondary clustering (via K-means or DBSCAN). These new clusters can define our endmember-bundles for a spectral-unmixing model.
+- Once we have these maps, we should color the point by which day the data came from to see if there are any interesting groups or if the data are distributd across observation days 
+- We should make sure we apply the method for unsupervised classification to the dye-released images (see if the maps mirror the diffusion of dye). Pick a day where we have >1 dye flight. Make a map for both cases to illustrate how rapidly fitting an unsupervised model on the fly can enable near real time tracking of plume evolution (good for defense, oil spills, etc...). --> can we then construct a vector field / flow field from the difference and predict the plume evolution? Maybe this would be a good excuse to try lagrangian particle tracking... 
+- Provided our GTM/SOM fits, we should try a secondary 
+- From nodes/node clusters, can we identify spectral endmembers that represent chemicals we measure (e.g. chlorophyll)? 
+- From node activations (SOM) or responsabilities (GTM) can we fit a good model that competes with predictions from full spectra? (dimensionality reduction demonstration)
+- cluster viewing geometry separate from refelctances and use resulting viewing geo classes to color GTM/SOM map of reflectance data
 
 ## Spectral Indices for Rapid HSI Surveys: Unsupervised and Supervised Methods via SciML
 - Apply to PROSPECT database as a simple test case 
