@@ -184,7 +184,7 @@ We could make a model that uses all 3 bands (RGB) simultaneously, or we can make
 - [video on Physics Informed DMD](https://www.youtube.com/watch?v=lx-msllg1kU&ab_channel=SteveBrunton)
 - [Deep Learning to Discover Coordinates for Dynamics: Autoencoders & Physics Informed Machine Learning](https://www.youtube.com/watch?v=KmQkDgu-Qp0&list=PLMrJAkhIeNNQ0BaKuBKY43k4xMo6NSbBa&ab_channel=SteveBrunton)
 
-- NOTE: we may need to impute missing values. We shoud do so with either my GPR code or with other ML methods + ConformalPrediction. Provided uncertainty estimates, we should then think about how to propagate errors through our analysis via [Measurements.jl](), [](), 
+- NOTE: we may need to impute missing values. We shoud do so with either my GPR code or with other ML methods + ConformalPrediction. Provided uncertainty estimates, we should then think about how to propagate errors through our analysis via [Measurements.jl](https://github.com/JuliaPhysics/Measurements.jl), [IntervalArithmetic](https://juliaintervals.github.io/pages/packages/intervalarithmetic/), 
 
 # Other things to think about
 - [Sparse Nonlinear Models for Fluid Dynamics with Machine Learning and Optimization](https://www.youtube.com/watch?v=z_CZ_VyMDXE&ab_channel=SteveBrunton)
