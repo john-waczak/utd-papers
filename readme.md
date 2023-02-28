@@ -165,3 +165,29 @@ We could make a model that uses all 3 bands (RGB) simultaneously, or we can make
 ## Bayesian Optimization with Gaussian Process Regression
 ## Gaussian Process Regression / Classification in MLJ
 ## Solar Geometry? (probably not necessary)
+
+
+# Sensor Network + SciML
+## Evaluation of local chaos in SharedAirDFWNetwork 
+- This gives me an excuse to work with the sensor data 
+- Train GTM, SOM, and Variational Autoencoder to produce lower dimensional representation of all data from a central node, e.g. in $\mathbb{R}^2$. 
+  - For VAE, test a range of dimensions from the number of sensors down to 2 (better for visualization)
+- Analyze the variety of methods from [DataDrivenDiffEq.jl](https://docs.sciml.ai/DataDrivenDiffEq/stable/) to infer dynamics in the low dimensional space 
+- Can we infer some kind of Hamiltonian from the data and do a HamiltonianNN approach? 
+  - Start of with a standard kinetic-energy style Hamiltonian e.g. $\sum_i \frac{1}{2} \dot{x}_i^2$ where $x_i$ is the 
+  - use DataDrivenDiffEq approach to learn the associated potential energy term 
+  - alternatively, attempt to capture diurnal cycle (or other relevant time scales) by *learning* coordinate representation that forces dynamics to be uncoupled harmonic oscillators a la Hamilton-Jacobi theory. 
+  - Test if this hamiltonian NN model can then be transfered to another central node with an appropriate shift in the "total energy" 
+- Attempt to analyze the 2d data to infer Koopman operator. We should treat the original sensor values as observables on which the learned koopman operator acts. This should be doable if the NN is just a function. 
+- use DMD appraoch to identify a "forcing" coordinate that can identify when we switch nodes as in [Chaos as an intermittently forced linear system
+](https://www.semanticscholar.org/paper/Chaos-as-an-intermittently-forced-linear-system-Brunton-Brunton/2efad3ddade8be144ec43d22a9f2992ab036a923)
+- [video on Physics Informed DMD](https://www.youtube.com/watch?v=lx-msllg1kU&ab_channel=SteveBrunton)
+- [Deep Learning to Discover Coordinates for Dynamics: Autoencoders & Physics Informed Machine Learning](https://www.youtube.com/watch?v=KmQkDgu-Qp0&list=PLMrJAkhIeNNQ0BaKuBKY43k4xMo6NSbBa&ab_channel=SteveBrunton)
+
+- NOTE: we may need to impute missing values. We shoud do so with either my GPR code or with other ML methods + ConformalPrediction. Provided uncertainty estimates, we should then think about how to propagate errors through our analysis via [Measurements.jl](), [](), 
+
+# Other things to think about
+- [Sparse Nonlinear Models for Fluid Dynamics with Machine Learning and Optimization](https://www.youtube.com/watch?v=z_CZ_VyMDXE&ab_channel=SteveBrunton)
+- [Residual Dynamic Mode Decomposition: A very easy way to get error bounds for your DMD computations](https://www.youtube.com/watch?v=Dc2OYDVp43I&ab_channel=SteveBrunton)
+- [Deep Learning of Dynamics and Coordinates with SINDy Autoencoders](https://www.youtube.com/watch?v=WHhDgxkiR9c&t=255s&ab_channel=SteveBrunton)
+- [Identifying Dominant Balance Physics from Data](https://www.youtube.com/watch?v=U6eZOzHLSM0&list=PLMrJAkhIeNNRK8orLUJL86k7BcuVX11dl&index=4&ab_channel=SteveBrunton)
