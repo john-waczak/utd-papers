@@ -1,26 +1,11 @@
-# -*- coding: utf-8 -*-
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .jl
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.14.6
-#   kernelspec:
-#     display_name: Julia 1.9.1
-#     language: julia
-#     name: julia-1.9
-# ---
-
 using Pkg
-Pkg.activate(".") 
+Pkg.activate(".")
 Pkg.status()
 
 Pkg.add(url="https://github.com/john-waczak/TimeSeriesTools.jl")
 
-using CSV, DataFrames 
-using Plots 
+using CSV, DataFrames
+using Plots
 using TimeSeriesTools
 using ParameterHandling
 using Dates, TimeZones
@@ -28,10 +13,14 @@ using Unitful
 using Markdown, LaTeXStrings
 using Statistics, StatsBase
 using BenchmarkTools
+using LinearAlgebra
+using DifferentialEquations
+using Interpolations
+using StaticArrays
+
 
 # # Download Data from OSN
 
-# +
 df1 = CSV.File(download("https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_1/2023/03/04/MINTS_001e06318c91_IPS7100_2023_03_04.csv")) |> DataFrame
 CSV.write("data/central_hub_1_ips7100__1.csv", df1)
 
@@ -314,7 +303,6 @@ Hprint
 #     H = U \Sigma V^\dagger
 # \end{equation}
 
-using LinearAlgebra
 
 # +
 U, σ, V = svd(H)
@@ -438,10 +426,6 @@ end
 p
 
 # Interestingly, these look like a sort of polynomial basis for $\mathbb{R}^n$.
-
-using DifferentialEquations
-using Interpolations
-using StaticArrays
 
 size(X)
 
