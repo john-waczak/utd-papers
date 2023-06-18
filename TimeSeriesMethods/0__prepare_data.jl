@@ -7,6 +7,7 @@ using DifferentialEquations
 using Dates, TimeZones
 
 using DataInterpolations
+#using Interpolations
 using StaticArrays
 using Statistics
 using Plots
@@ -92,9 +93,10 @@ df_out = DataFrame()
 df_out.t = df_ips7100.t[1]:df_ips7100.t[end]
 
 
+
 for col_name ∈ names(df_ips7100)
     if col_name ∉ ["dateTime", "t"]
-        f = CubicSpline(df_ips7100[:, col_name], df_ips7100.t)
+        f = LinearInterpolation(df_ips7100[:, col_name], df_ips7100.t)
         df_out[!, col_name] = f.(df_out.t)
     end
 end
@@ -104,14 +106,27 @@ for col_name ∈ ["temperature", "pressure", "humidity"]
     df_out[!, col_name] = f.(df_out.t)
 end
 
-
 names(df_out)
 
+
+# plot(df_out.t ./ (60^2*24), df_out.pm2_5, label="")
+# plot!(
+#     twinx(),
+#     df_out.t ./ (60^2 * 24),
+#     df_out.humidity,
+#     color=:red,
+#     alpha=0.5,
+#     lw=2,
+#     label=""
+# )
+# #xlims!(2,2.4)
+
+
 # save the file
-if !ispath("data/SharedAir")
-    mkpath("data/SharedAir")
+if !ispath("data/sharedair")
+    mkpath("data/sharedair")
 end
-CSV.write("data/SharedAir/data.csv", df_out)
+CSV.write("data/sharedair/data.csv", df_out)
 
 
 # generate simple Lorenz system data to match that used in paper's example
