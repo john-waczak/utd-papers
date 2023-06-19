@@ -28,7 +28,8 @@ function get_data(path, cols_to_use)
     return ts, Matrix(df[:, cols_to_use])
 end
 
-ts, Data = get_data("data/sharedair/data.csv", [:pm1_0, :pm2_5, :pm10_0])
+#ts, Data = get_data("data/sharedair/data.csv", [:pm1_0, :pm2_5, :pm10_0])
+ts, Data = get_data("data/sharedair/data.csv", [:pm2_5]) #, :pm2_5, :pm10_0])
 size(ts)
 size(Data)
 
@@ -52,7 +53,8 @@ println("we have $(length(σ)) singular values")
 @assert all(H .≈ U*Diagonal(σ)*V')  # verify that decomposition works
 
 # 3. visualize the attractor:
-Nmax = 200000
+#Nmax = 200000
+Nmax = 400000
 plot_times =  collect(1:size(V,1)) ./ (60.0)^2
 p1 = scatter(
     V[1:Nmax,1], V[1:Nmax,2], V[1:Nmax,3],
@@ -83,6 +85,26 @@ savefig("figures/sharedair/havok/singular_values.pdf")
 # 5. compute cut-off value for singular values based on magnitude
 r = r_cutoff(σ,ratio=0.005, rmax=30)
 
+size(V)
+
+# r = r_optimal_approx(σ, size(V,2), size(V,1))
+# r = 46  # too high
+# r = 30 # too high
+# r = 20 # slightly too big
+# r = 15 # a smidge too small
+r = 18  # really close but slightly too big
+# r = 17 # too small
+# r = 19
+
+
+# add extra dimensions to r for > 1 control variable
+# n_control = 3
+# n_control = 2  # not enough
+# n_control = 5  
+n_control = 10  # not enough
+
+r = r + n_control - 1
+
 
 # 6. truncate the matrices
 Vr = @view V[:,1:r]
@@ -93,32 +115,36 @@ Ur = @view U[:,1:r]
 # 7. compute derivative using fourth order central difference scheme
 dt = mean(ts[2:end] .- ts[1:end-1])
 
-dVr = zeros(size(Vr,1)-5, r-1)
-for k ∈ 1:r-1, i ∈ 3:size(Vr,1)-3
-    dVr[i-2,k] = (1/(12*dt)) * (-Vr[i+2, k] + 8*Vr[i+1, k] - 8*Vr[i-1,k] + Vr[i-2,k])
+dVr = zeros(size(Vr,1)-5, r-n_control)
+
+Threads.@threads for k ∈ 1:r-n_control
+    for i ∈ 3:size(Vr,1)-3
+        @inbounds dVr[i-2,k] = (1/(12*dt)) * (-Vr[i+2, k] + 8*Vr[i+1, k] - 8*Vr[i-1,k] + Vr[i-2,k])
+    end
 end
 
-@assert size(dVr,2) == r-1
+@assert size(dVr,2) == r-n_control
 
 
 # 8. chop off edges to size of data matches size of derivative
 X = @view Vr[3:end-3, :]
 dX = @view dVr[:,:]
 
-@assert size(X,2) == size(dX,2)  + 1
+@assert size(dX,2) == size(X,2)  - n_control
 
 
 # 9. Compute model matrix via least squares
 Ξ = (X\dX)'  # now Ξx = dx for a single column vector view
 
-A = Ξ[:, 1:end-1]   # State matrix A
-B = Ξ[:, end]'      # Control matrix B
+A = Ξ[:, 1:r-n_control]   # State matrix A
+B = Ξ[:, r-n_control+1:end]      # Control matrix B
+
 
 
 # 10. visualize matrices
 p1 = heatmap(A, yflip=true, xlabel="A", ylabel="", showaxis=false,link=:y, cbar=false,clims=(minimum(A), maximum(A)), leftmargin=0*Plots.mm,rightmargin=0*Plots.mm)
-p2 = heatmap(reshape(B', length(B), 1), yflip=true, xlabel="B", ylabel="", showaxis=false, link=:y, clims=(minimum(A),maximum(A)), color=:inferno,rightmargin=10*Plots.mm, leftmargin=0*Plots.mm)
-plot(p1, p2, layout = @layout([a{0.8w} b{0.2w} ]))
+p2 = heatmap(B, yflip=true, xlabel="B", ylabel="", showaxis=false, link=:y, clims=(minimum(A),maximum(A)), color=:inferno,rightmargin=10*Plots.mm, leftmargin=0*Plots.mm)
+plot(p1, p2, layout = @layout([a{0.7w} b{0.3w} ]))
 
 savefig("figures/sharedair/havok/heatmap.png")
 savefig("figures/sharedair/havok/heatmap.pdf")
@@ -129,10 +155,12 @@ p = plot([], yticks=[0.0,], legend=:outerright, label="")
 for i ∈ 1:r
     if i ≤ 3
         plot!(Ur[:,i], label=L"u_{%$i}", color=:blue)
-    elseif i > 3 && i < r
+    elseif i > 3 && i ≤ r-n_control
         plot!(Ur[:,i], label="", color=:grey, alpha=0.5)
-    else
+    elseif i == r - n_control + 1
         plot!(Ur[:,i], label=L"u_{r}", color=:red)
+    else
+        plot!(Ur[:,i], label="", color=:red)
     end
 end
 
@@ -147,41 +175,52 @@ savefig("figures/sharedair/havok/eigenmodes.pdf")
 
 
 
-# 12. define interpolation function for forcing coordinate
+# 12. define interpolation function for forcing coordinate(s)
 # +3 because of offset from derivative...
 ts = range(dt*(Nwindow+3), step=dt, length=size(X,1))
-xᵣ = CubicSpline(X[:,end], ts)
+
+#itps = [CubicSpline(X[:,j], ts) for j ∈ r-n_control+1:r]
+itps = [DataInterpolations.LinearInterpolation(X[:,j], ts) for j ∈ r-n_control+1:r]
+u(t) = [itp(t) for itp ∈ itps]
+
+#xᵣ = CubicSpline(X[:,end], ts)
+#xᵣ = linear_interpolation(Float64.(ts), X[:, r-n_control+1:end])
+
 xᵣ(ts[1])
 
 
 # 13. visualize first embedding coordinate + the forcing term
-xs = xᵣ.(ts)
+xs = u.(ts)
 p1 = plot(
-    ts[1:Nmax],
+    ts[1:Nmax] ./ (60^2),
     X[1:Nmax,1],
     xlabel="",
     ylabel="v₁",
     label=""
 )
 
-p2 = plot(
-    ts[1:Nmax],
-    xs[1:Nmax].^2,
-    ylabel="vᵣ²",
-    xlabel="time",
-    label="",
-    color=:red,
-    link=:x,
-    grid=false,
-    minorgrid=false,
-    yticks=[0.0]
-)
+p2  = plot()
+for j ∈ 1:1
+    plot!(
+        ts[1:Nmax] ./ (60^2),
+        map(x->x[j]^2, xs[1:Nmax]),
+        ylabel="vᵣ²",
+        xlabel="time",
+        label="",
+        color=:red,
+        link=:x,
+        grid=false,
+        minorgrid=false,
+        yticks=[0.0]
+    )
+end
 
 l = @layout [
     a{0.8h}
     b
 ]
-plot(p1, p2, layout=l)
+p = plot(p1, p2, layout=l)
+display(p)
 
 savefig("figures/sharedair/havok/v1_with_forcing.png")
 savefig("figures/sharedair/havok/v1_with_forcing.pdf")
@@ -192,28 +231,34 @@ savefig("figures/sharedair/havok/v1_with_forcing.pdf")
 
 # 14. Integrate model forward in time
 sA = @SMatrix[A[i,j] for i ∈ axes(A,1), j ∈ axes(A,2)]
-sB = @SVector[b for b ∈ B'] # j ∈ axes(B,2)]
+sB = @SMatrix[B[i,j] for i ∈ axes(B,1), j ∈ axes(B,2)]
+#sB = @SVector[b for b ∈ B'] # j ∈ axes(B,2)]
 
 
 # define function and integrate to get model predictions
-function f!(du, u, p, t)
+function f!(dx, x, p, t)
     A,B = p
-    du .= A*u + B*xᵣ(t)
+    dx .= A*x + B*u(t)
 end
 
 params = (sA, sB)
-x₀ = X[1,1:end-1]
+x₀ = X[1,1:r-n_control]
 dx = copy(x₀)
+
+# A*x₀ + sB*u(ts[1])
 
 @assert size(x₀) == size(dx)
 @benchmark f!(dx, x₀, params, ts[1])
 
+
+
 prob = ODEProblem(f!, x₀, (ts[1], ts[end]), params)
-sol = solve(prob, saveat=ts);
+sol = solve(prob, saveat=ts)# , abstol=1e-12, reltol=1e-12);
 size(sol)
 
 
 # 15. visualize results
+Nmax = 1000
 p1 = plot(
     ts[1:Nmax] ./ (60^2),
     X[1:Nmax, 1],
@@ -232,6 +277,7 @@ plot!(
     lw=2
 )
 
-savefig("figures/lorenz/timeseries_reconstructed.png")
-savefig("figures/lorenz/timeseries_reconstructed.pdf")
+
+savefig("figures/sharedair/havok/timeseries_reconstructed.png")
+savefig("figures/sharedair/havok/timeseries_reconstructed.pdf")
 

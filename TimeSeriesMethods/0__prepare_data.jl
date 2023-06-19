@@ -2,6 +2,8 @@ using Pkg
 #Pkg.add(url="https://github.com/john-waczak/TimeSeriesTools.jl")
 Pkg.add(url="https://github.com/john-waczak/TimeSeriesTools.jl.git")
 
+
+using TimeSeriesTools
 using CSV, DataFrames
 using DifferentialEquations
 using Dates, TimeZones
