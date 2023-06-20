@@ -199,8 +199,8 @@ p1 = plot(
     lw=3
 )
 
-savefig("figures/sharedair/time-series_variogram-unc.png")
-savefig("figures/sharedair/time-series_variogram-unc.pdf")
+savefig("figures/sharedair/variograms/time-series_variogram-unc.png")
+savefig("figures/sharedair/variograms/time-series_variogram-unc.pdf")
 
 
 

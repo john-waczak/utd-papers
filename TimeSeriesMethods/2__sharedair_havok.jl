@@ -1,17 +1,22 @@
 using CSV, DataFrames
-using Plots
+using Plots, StatsPlots
 using TimeSeriesTools
 using ParameterHandling
 using Dates, TimeZones
 using Unitful
 using Markdown, LaTeXStrings
-using Statistics, StatsBase
+using Statistics, StatsBase, Distributions, KernelDensity
 using BenchmarkTools
 using LinearAlgebra
 using DifferentialEquations
 using DataInterpolations
 using StaticArrays
 
+include("plot_defaults.jl")
+add_mints_theme()
+theme(:mints)
+
+include("plot_recipes.jl")
 include("utils.jl")
 
 if !ispath("figures/sharedair/havok")
@@ -130,6 +135,15 @@ end
 X = @view Vr[3:end-3, :]
 dX = @view dVr[:,:]
 
+# Xtrain = @view X[1:end-1000,:]
+# Xtest = @view X[end-1000+1:end,:]
+
+# dXtrain = @view dX[1:end-1000, :]
+# dXtest = @view dX[end-1000+1:end, :]
+
+
+Ntrain = size(X,1) - 1000
+
 @assert size(dX,2) == size(X,2)  - n_control
 
 
@@ -186,7 +200,7 @@ u(t) = [itp(t) for itp ∈ itps]
 #xᵣ = CubicSpline(X[:,end], ts)
 #xᵣ = linear_interpolation(Float64.(ts), X[:, r-n_control+1:end])
 
-xᵣ(ts[1])
+# xᵣ(ts[1])
 
 
 # 13. visualize first embedding coordinate + the forcing term
@@ -258,26 +272,138 @@ size(sol)
 
 
 # 15. visualize results
-Nmax = 1000
+offset = 1
+#offset = Ntrain - 10000
+Nmax = 10000
 p1 = plot(
-    ts[1:Nmax] ./ (60^2),
-    X[1:Nmax, 1],
-    xlabel="time",
+    ts[offset:offset+Nmax] ./ (60^2),
+    X[offset:offset+Nmax, 1],
+    # xlabel="time (hours)",
     ylabel="v₁",
     label="embedding",
-    lw=2
+    lw=2,
+    legend=:topright
 )
 
 
 plot!(
-    sol.t[1:Nmax] ./ (60^2),
-    sol[1,1:Nmax],
+    sol.t[offset:offset+Nmax] ./ (60^2),
+    sol[1,offset:offset+Nmax],
+    label="fit",
+    ls=:dot,
+    lw=2,
+)
+
+
+p2 = plot(
+    ts[offset:offset+Nmax] ./ (60^2),
+    X[offset:offset+Nmax, 2],
+    # xlabel="time (hours)",
+    ylabel="v₂",
+    label="embedding",
+    lw=2,
+    legend=:topright,
+    link=:x,
+)
+
+
+plot!(
+    sol.t[offset:offset+Nmax] ./ (60^2),
+    sol[2,offset:offset+Nmax],
     label="fit",
     ls=:dot,
     lw=2
 )
 
 
+p3 = plot(
+    ts[offset:offset+Nmax] ./ (60^2),
+    X[offset:offset+Nmax, 3],
+    xlabel="time (hours)",
+    ylabel="v₃",
+    label="embedding",
+    lw=2,
+    legend=:topright,
+    link=:x
+)
+
+
+plot!(
+    sol.t[offset:offset+Nmax] ./ (60^2),
+    sol[3,offset:offset+Nmax],
+    label="fit",
+    ls=:dot,
+    lw=2
+)
+
+plot(p1, p2, p3, layout=(3,1), size=(1600, 1000), margin=5*Plots.mm)
+
+
 savefig("figures/sharedair/havok/timeseries_reconstructed.png")
 savefig("figures/sharedair/havok/timeseries_reconstructed.pdf")
+
+
+
+# 16. visualize the fitted attractor:
+Nmax = 15000
+p1 = scatter(
+    sol[1,1:Nmax], sol[2, 1:Nmax], sol[3, 1:Nmax],
+    ms=2,
+    msw=0,
+    msa=0,
+    marker_z = sol.t[1:Nmax],
+    frame=:none,
+    ticks=nothing,
+    xlabel="",
+    ylabel="",
+    zlabel="",
+    label="",
+    cbar=false,
+    margins=0*Plots.mm,
+    background_color=:transparent
+)
+
+savefig("figures/sharedair/havok/attractor_reconstructed.png")
+savefig("figures/sharedair/havok/attractor_reconstructed.pdf")
+
+
+train_shift = 30000
+# 17. scatter plot and quantile quantile of fit
+p1 = scatterresult(
+    X[1:Nmax,1], sol[1,1:Nmax],
+    X[train_shift+1:train_shift+Nmax,1], sol[1, train_shift+1:train_shift+Nmax],
+    xlabel="True v₁",
+    ylabel="Predicted v₁",
+    plot_title="HAVOK Fit for v₁",
+)
+
+savefig("figures/sharedair/havok/scatterplot.png")
+savefig("figures/sharedair/havok/scatterplot.pdf")
+
+
+p1 = quantilequantile(
+    X[1:Nmax,1], sol[1,1:Nmax],
+    X[train_shift+1:train_shift+Nmax,1], sol[1, train_shift+1:train_shift+Nmax],
+    xlabel="True v₁",
+    ylabel="Predicted v₁",
+    title="HAVOK Fit for v₁",
+)
+
+savefig("figures/sharedair/havok/quantile-quantile.png")
+savefig("figures/sharedair/havok/quantile-quantile.pdf")
+
+
+pdf = kde(X[:, r-n_control + 1])
+idxs_nozero = pdf.density .> 0
+gauss = fit(Normal, X[:, r-n_control+1])
+
+plot(gauss, label="gaussian fit", yaxis=:log, ls=:dash)
+plot!(pdf.x[idxs_nozero], pdf.density[idxs_nozero], label="pdf")
+ylims!(1e-1, 1e3)
+xlims!(-0.01, 0.01)
+title!("Forcing Statistics")
+
+savefig("figures/sharedair/havok/forcing-stats.png")
+savefig("figures/sharedair/havok/forcing-stats.pdf")
+
 
