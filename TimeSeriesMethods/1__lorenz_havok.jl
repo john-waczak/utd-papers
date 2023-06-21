@@ -5,32 +5,37 @@ using ParameterHandling
 using Dates, TimeZones
 using Unitful
 using Markdown, LaTeXStrings
-using Statistics, StatsBase
+using Statistics, StatsBase, Distributions, KernelDensity
 using BenchmarkTools
 using LinearAlgebra, StaticArrays
 using DifferentialEquations
 using DataInterpolations
 
+include("plot_defaults.jl")
+add_mints_theme()
+theme(:mints)
+
+include("plot_recipes.jl")
 include("utils.jl")
 
-if !ispath("figures/lorenz")
-    mkpath("figures/lorenz")
+if !ispath("figures/lorenz/havok")
+    mkpath("figures/lorenz/havok")
 end
 
 
-# load data
+# 0. load data
 Data = Matrix(CSV.File("data/lorenz/data.csv") |> DataFrame)
 
 
-# compute time delay embedding
+# 1. compute time delay embedding
 H = TimeDelayEmbedding(Data[:,2], method=:backward)
 
-# compute singular value decomposition
+# 2. compute singular value decomposition
 U, σ, V = svd(H)
 
 size(V)
 
-# visualize attractor
+# 3. visualize attractor
 dt = 0.001
 tspan = range(dt, step=dt, length=size(Data,1))
 Nmax = 50000  # max value for plotting
@@ -74,49 +79,54 @@ p2 = scatter(
 
 plot(p1, p2)
 
-savefig("figures/lorenz/attractors1.png")
-savefig("figures/lorenz/attractors1.pdf")
+savefig("figures/lorenz/havok/attractors1.png")
+savefig("figures/lorenz/havok/attractors1.pdf")
 
 
-# set r value to 15 as in paper
+# 5. set r value to 15 as in paper
 r = 15
-# truncate the matrices
+n_control = 1
+r = r + n_control - 1
+
+# 6. truncate the matrices
 Vr = @view V[:,1:r]
 Ur = @view U[:,1:r]
 σr = @view σ[1:r]
 
 
-# compute derivatives with fourth order finite difference scheme
-dVr = zeros(size(Vr,1)-5, r-1)
-for k ∈ 1:r-1, i ∈ 3:size(Vr,1)-3
-    dVr[i-2,k] = (1/(12*dt)) * (-Vr[i+2, k] + 8*Vr[i+1, k] - 8*Vr[i-1,k] + Vr[i-2,k])
+# 7. compute derivatives with fourth order finite difference scheme
+dVr = zeros(size(Vr,1)-5, r-n_control)
+Threads.@threads for k ∈ 1:r-n_control
+    for i ∈ 3:size(Vr,1)-3
+        @inbounds dVr[i-2,k] = (1/(12*dt)) * (-Vr[i+2, k] + 8*Vr[i+1, k] - 8*Vr[i-1,k] + Vr[i-2,k])
+    end
 end
 
-@assert size(dVr,2) == r-1
+@assert size(dVr,2) == r-n_control
 
 
-# chop off edges so size of data matches size of derivative
+# 8. chop off edges so size of data matches size of derivative
 X = @view Vr[3:end-3, :]
 dX = @view dVr[:,:]
 
 @assert size(X,2) == size(dX,2)  + 1
 
-# compute matrix such that dX = XΞ'
+# 9. compute matrix such that dX = XΞ'
 Ξ = (X\dX)'  # now Ξx = dx for a single column vector view
+# Ξ = dX' / X' equivalent version...
 
-A = Ξ[:, 1:end-1]   # State matrix A
-B = Ξ[:, end]'      # Control matrix B
+A = Ξ[:, 1:r-n_control]   # State matrix A
+B = Ξ[:, r-n_control+1:end]      # Control matrix B
 
-
-# visualize matrices
+# 10. visualize matrices
 p1 = heatmap(A, yflip=true, xlabel="A", ylabel="", showaxis=false,link=:y, cbar=false,clims=(minimum(A), maximum(A)), leftmargin=0*Plots.mm,rightmargin=0*Plots.mm)
-p2 = heatmap(reshape(B', length(B), 1), yflip=true, xlabel="B", ylabel="", showaxis=false, link=:y, clims=(minimum(A),maximum(A)), color=:inferno,rightmargin=10*Plots.mm, leftmargin=0*Plots.mm)
+p2 = heatmap(B, yflip=true, xlabel="B", ylabel="", showaxis=false, link=:y, clims=(minimum(A),maximum(A)), color=:inferno,rightmargin=10*Plots.mm, leftmargin=0*Plots.mm)
 plot(p1, p2, layout = @layout([a{0.8w} b{0.2w} ]))
 
-savefig("figures/lorenz/heatmap.png")
-savefig("figures/lorenz/heatmap.pdf")
+savefig("figures/lorenz/havok/heatmap.png")
+savefig("figures/lorenz/havok/heatmap.pdf")
 
-# visualize eigenmodes
+# 11. visualize eigenmodes
 p = plot([], yticks=[-0.3, 0.0, 0.3], legend=:outerright, label="")
 for i ∈ 1:r
     if i ≤ 3
@@ -127,19 +137,20 @@ for i ∈ 1:r
         plot!(Ur[:,i], label=L"u_{%$i}", color=:red)
     end
 end
+
 display(p)
 
-savefig("figures/lorenz/eigenmodes.png")
-savefig("figures/lorenz/eigenmodes.pdf")
+savefig("figures/lorenz/havok/eigenmodes.png")
+savefig("figures/lorenz/havok/eigenmodes.pdf")
 
 
 # define interpolation function for forcing coordinate
 ts = range(dt, step=dt, length=size(X,1))
-xᵣ = CubicSpline(X[:,end], ts)
-xᵣ(ts[1])
+itps = [DataInterpolations.LinearInterpolation(X[:,j], ts) for j ∈ r-n_control+1:r]
+u(t) = [itp(t) for itp ∈ itps]
 
-# visualize first embedding coordinate that we want to fit:
-xs = xᵣ.(ts)
+# 13. visualize first embedding coordinate that we want to fit:
+xs = u.(ts)
 
 p1 = plot(
     ts[1:Nmax],
@@ -151,7 +162,7 @@ p1 = plot(
 
 p2 = plot(
     ts[1:Nmax],
-    xs[1:Nmax].^2,
+    map(x->x[1]^2, xs[1:Nmax]),
     ylabel="vᵣ²",
     xlabel="time",
     label="",
@@ -168,23 +179,22 @@ l = @layout [
 ]
 plot(p1, p2, layout=l)
 
-savefig("figures/lorenz/v1_with_forcing.png")
-savefig("figures/lorenz/v1_with_forcing.pdf")
+savefig("figures/lorenz/havok/v1_with_forcing.png")
+savefig("figures/lorenz/havok/v1_with_forcing.pdf")
 
 
-# Generate our A and B matrices as static arrays
+# 14. Generate our A and B matrices as static arrays
 sA = @SMatrix[A[i,j] for i ∈ axes(A,1), j ∈ axes(A,2)]
-sB = @SVector[b for b ∈ B'] # j ∈ axes(B,2)]
-
+sB = @SMatrix[B[i,j] for i ∈ axes(B,1), j ∈ axes(B,2)]
 
 # define function and integrate to get model predictions
-function f!(du, u, p, t)
+function f!(dx, x, p, t)
     A,B = p
-    du .= A*u + B*xᵣ(t)
+    dx .= A*x + B*u(t)
 end
 
 params = (sA, sB)
-x₀ = X[1,1:end-1]
+x₀ = X[1,1:r-n_control]
 dx = copy(x₀)
 
 @assert size(x₀) == size(dx)
@@ -194,7 +204,7 @@ prob = ODEProblem(f!, x₀, (ts[1], ts[end]), params)
 sol = solve(prob, saveat=ts);
 size(sol)
 
-# visualize results
+# 15. visualize results
 L = 300:25000
 
 p1 = plot(
@@ -211,9 +221,255 @@ plot!(
     sol.t[L],
     sol[1,L],
     label="fit",
-    ls=:dash,
+    ls=:dot,
     lw=2
 )
 
-savefig("figures/lorenz/timeseries_reconstructed.png")
-savefig("figures/lorenz/timeseries_reconstructed.pdf")
+
+savefig("figures/lorenz/havok/timeseries_reconstructed.png")
+savefig("figures/lorenz/havok/timeseries_reconstructed.pdf")
+
+
+
+# 16. visualize the fitted attractor:
+p1 = scatter(
+    sol[1,L], sol[2, L], sol[3, L],
+    ms=2,
+    msw=0,
+    msa=0,
+    marker_z = sol.t[L],
+    frame=:none,
+    ticks=nothing,
+    xlabel="",
+    ylabel="",
+    zlabel="",
+    label="",
+    cbar=false,
+    margins=0*Plots.mm,
+    background_color=:transparent
+)
+
+savefig("figures/lorenz/havok/attractor_reconstructed.png")
+savefig("figures/lorenz/havok/attractor_reconstructed.pdf")
+
+
+
+# 18. Statistics of forcing function
+
+forcing_pdf = kde(X[:, r-n_control + 1])
+idxs_nozero = forcing_pdf.density .> 0
+gauss = fit(Normal, X[:, r-n_control+1])
+
+plot(gauss, label="gaussian fit", yaxis=:log, ls=:dash)
+plot!(forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], label="pdf")
+ylims!(1e-1, 1e3)
+xlims!(-0.01, 0.01)
+xlabel!("vᵣ")
+title!("Forcing Statistics")
+
+savefig("figures/lorenz/havok/forcing-stats.png")
+savefig("figures/lorenz/havok/forcing-stats.pdf")
+
+Lshifted = L .+ 10000
+# 17. scatter plot and quantile quantile of fit
+p1 = scatterresult(
+    X[L,1], sol[1,L],
+    X[Lshifted,1], sol[1, Lshifted],
+    xlabel="True v₁",
+    ylabel="Predicted v₁",
+    plot_title="HAVOK Fit for v₁",
+)
+
+savefig("figures/lorenz/havok/scatterplot.png")
+savefig("figures/lorenz/havok/scatterplot.pdf")
+
+
+p1 = quantilequantile(
+    X[1:Nmax,1], sol[1,1:Nmax],
+    X[train_shift+1:train_shift+Nmax,1], sol[1, train_shift+1:train_shift+Nmax],
+    xlabel="True v₁",
+    ylabel="Predicted v₁",
+    title="HAVOK Fit for v₁",
+)
+
+savefig("figures/lorenz/havok/quantile-quantile.png")
+savefig("figures/lorenz/havok/quantile-quantile.pdf")
+
+
+
+
+# 18. Statistics of forcing function
+
+forcing_pdf = kde(X[:, r-n_control + 1])
+idxs_nozero = forcing_pdf.density .> 0
+gauss = fit(Normal, X[:, r-n_control+1])
+
+plot(gauss, label="gaussian fit", yaxis=:log, ls=:dash)
+plot!(forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], label="pdf")
+ylims!(1e-1, 1e3)
+xlims!(-0.01, 0.01)
+xlabel!("vᵣ")
+title!("Forcing Statistics")
+
+savefig("figures/lorenz/havok/forcing-stats.png")
+savefig("figures/lorenz/havok/forcing-stats.pdf")
+
+
+
+
+# 19. Compute indices where forcing is active
+thresh = 4.0e-6
+
+inds = X[:, r-n_control+1] .^ 2 .> thresh
+
+Δmax = 500
+
+idx_start = []
+idx_end = []
+
+start = 1
+new_hit = 1
+
+while !isnothing(new_hit)
+    push!(idx_start, start)
+
+    endmax = min(start + 500, size(X,1)) # 500 must be max window size for forcing
+
+    interval = start:endmax
+    hits = findall(inds[interval])
+    endval = start + hits[end]
+
+    push!(idx_end, endval)
+
+    # if endval + 1 ≥ size(X,1)
+    #     break
+    # end
+
+    # now move to next hit:
+    new_hit = findfirst(inds[endval+1:end])
+
+    if !isnothing(new_hit)
+        start = endval + new_hit
+    end
+end
+
+# set up index dictionaries to make this easier
+forcing_dict = Dict(
+    :on => [idx_start[i]:idx_end[i] for i ∈ 2:length(idx_start)],
+    :off => [idx_end[i]:idx_start[i+1] for i ∈ 2:length(idx_start)-1]
+)
+
+# add the final indices since they have inds of 0
+#push!(forcing_dict[:off], idx_end[end]:size(X,1))
+
+
+
+
+# 20. visualize the lobe switching behavior
+p1  = plot()
+# add plots for forcing times
+for idxs ∈ forcing_dict[:on]
+    plot!(
+        p1,
+        ts[idxs],
+        X[idxs,1],
+        xlabel="",
+        ylabel="v₁",
+        label="",
+        color=mints_palette[2],
+    )
+end
+# add plots for linear times
+for idxs ∈ forcing_dict[:off]
+    plot!(
+        p1,
+        ts[idxs],
+        X[idxs,1],
+        xlabel="",
+        ylabel="v₁",
+        label="",
+        color=mints_palette[1],
+    )
+end
+
+# do the same for the forcing
+p2 = plot(
+    link=:x,
+    grid=false,
+    minorgrid=false,
+    yticks=[0.0]
+)
+
+for idxs ∈ forcing_dict[:on]
+    plot!(
+        p2,
+        ts[idxs],
+        map(x->x[1], xs[idxs]),
+        ylabel="v₁₅",
+        xlabel="time",
+        label="",
+        color=mints_palette[2],
+    )
+end
+# add plots for linear times
+for idxs ∈ forcing_dict[:off]
+    plot!(
+        p2,
+        ts[idxs],
+        map(x->x[1], xs[idxs]),
+        ylabel="v₁₅",
+        xlabel="time",
+        label="",
+        color=mints_palette[1],
+    )
+end
+
+l = @layout [
+    a{0.8h}
+    b
+]
+plot(p1, p2, layout=l)
+xlims!(0, 40)
+
+savefig("figures/lorenz/havok/v1_forcing_identified.png")
+savefig("figures/lorenz/havok/v1_forcing_identified.pdf")
+
+
+
+# 21. Color-code attractor by forcing
+p1 = plot(
+    frame=:semi,
+    ticks=nothing,
+    xlabel="x",
+    ylabel="y",
+    zlabel="z",
+    cbar=false,
+    margins=0*Plots.mm,
+    background_color=:transparent,
+    title="Attractor with Intermittent Forcing"
+
+)
+
+for idxs ∈ forcing_dict[:on]
+    plot!(
+        p1,
+        X[idxs,1], X[idxs,2], X[idxs,3],
+        color=mints_palette[2],
+        label="",
+    )
+end
+# add plots for linear times
+for idxs ∈ forcing_dict[:off]
+    plot!(
+        p1,
+        X[idxs,1], X[idxs,2], X[idxs,3],
+        color=mints_palette[1],
+        label="",
+    )
+end
+
+display(p1)
+
+savefig("figures/lorenz/havok/attractor_w_forcing.png")
+savefig("figures/lorenz/havok/attractor_w_forcing.pdf")
+

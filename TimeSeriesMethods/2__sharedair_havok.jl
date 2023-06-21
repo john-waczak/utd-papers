@@ -103,10 +103,10 @@ r = 18  # really close but slightly too big
 
 
 # add extra dimensions to r for > 1 control variable
-# n_control = 3
+n_control = 3
 # n_control = 2  # not enough
 # n_control = 5  
-n_control = 10  # not enough
+# n_control = 10  # not enough
 
 r = r + n_control - 1
 
@@ -134,13 +134,6 @@ end
 # 8. chop off edges to size of data matches size of derivative
 X = @view Vr[3:end-3, :]
 dX = @view dVr[:,:]
-
-# Xtrain = @view X[1:end-1000,:]
-# Xtest = @view X[end-1000+1:end,:]
-
-# dXtrain = @view dX[1:end-1000, :]
-# dXtest = @view dX[end-1000+1:end, :]
-
 
 Ntrain = size(X,1) - 1000
 
@@ -393,17 +386,29 @@ savefig("figures/sharedair/havok/quantile-quantile.png")
 savefig("figures/sharedair/havok/quantile-quantile.pdf")
 
 
-pdf = kde(X[:, r-n_control + 1])
-idxs_nozero = pdf.density .> 0
+
+# 18. Statistics of forcing function
+
+forcing_pdf = kde(X[:, r-n_control + 1])
+idxs_nozero = forcing_pdf.density .> 0
 gauss = fit(Normal, X[:, r-n_control+1])
 
 plot(gauss, label="gaussian fit", yaxis=:log, ls=:dash)
-plot!(pdf.x[idxs_nozero], pdf.density[idxs_nozero], label="pdf")
+plot!(forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], label="pdf")
 ylims!(1e-1, 1e3)
 xlims!(-0.01, 0.01)
+xlabel!("vᵣ")
 title!("Forcing Statistics")
 
 savefig("figures/sharedair/havok/forcing-stats.png")
 savefig("figures/sharedair/havok/forcing-stats.pdf")
 
 
+
+# 19. Visualize forcing regimes
+thresh = 4.0e-6
+inds_1 = X[:, r-n_control+1] .^ 2 .> thresh
+
+inds_1
+
+plot(X[1:3*Nmax,r-n_control+3].^2, ylims=(0, 400*median(X[1:3*Nmax, r-n_control+3].^2)))
