@@ -35,6 +35,7 @@ end
 
 #ts, Data = get_data("data/sharedair/data.csv", [:pm1_0, :pm2_5, :pm10_0])
 ts, Data = get_data("data/sharedair/data.csv", [:pm2_5]) #, :pm2_5, :pm10_0])
+
 size(ts)
 size(Data)
 
@@ -51,6 +52,15 @@ size(H)  # so we have 10 columns of data with 81 times each giving 810 elements 
 println("computing SVD... this could take a while")
 U, σ, V = svd(H)
 
+# U₁:Uₙ ---> vᵣ¹, .... vᵣⁿ ---> p(v̂ᵣ) ~N(μ, Σ)
+
+# start with U₁Σ₁V₁' ---> r modes + n controls (forcing terms)
+
+# dictionary of modes
+# dictionary of forcing terms
+
+# DMD for long time series...
+
 println("U has dimensions ", size(U))
 println("V has dimensions ", size(V))
 println("we have $(length(σ)) singular values")
@@ -60,6 +70,7 @@ println("we have $(length(σ)) singular values")
 # 3. visualize the attractor:
 #Nmax = 200000
 Nmax = 400000
+println("max time: ", ts[Nmax]./(60^2*24), " (hours)")
 plot_times =  collect(1:size(V,1)) ./ (60.0)^2
 p1 = scatter(
     V[1:Nmax,1], V[1:Nmax,2], V[1:Nmax,3],
@@ -93,20 +104,10 @@ r = r_cutoff(σ,ratio=0.005, rmax=30)
 size(V)
 
 # r = r_optimal_approx(σ, size(V,2), size(V,1))
-# r = 46  # too high
-# r = 30 # too high
-# r = 20 # slightly too big
-# r = 15 # a smidge too small
-r = 18  # really close but slightly too big
-# r = 17 # too small
-# r = 19
-
+r = 18  # maybe just right?
 
 # add extra dimensions to r for > 1 control variable
-n_control = 3
-# n_control = 2  # not enough
-# n_control = 5  
-# n_control = 10  # not enough
+n_control = 10
 
 r = r + n_control - 1
 
@@ -119,6 +120,7 @@ Ur = @view U[:,1:r]
 
 # 7. compute derivative using fourth order central difference scheme
 dt = mean(ts[2:end] .- ts[1:end-1])
+@assert dt == 1.0
 
 dVr = zeros(size(Vr,1)-5, r-n_control)
 
@@ -134,10 +136,28 @@ end
 # 8. chop off edges to size of data matches size of derivative
 X = @view Vr[3:end-3, :]
 dX = @view dVr[:,:]
-
-Ntrain = size(X,1) - 1000
-
 @assert size(dX,2) == size(X,2)  - n_control
+
+
+ts = range(ts[3], step=dt, length=size(dVr,1))
+
+# let's try it out on 3 days worth of data with 1 day of data for testing
+tend1 = dt*(3*24*60*60)
+tend2 = dt*(4*24*60*60)
+
+# pinch time values for entire range: train + test
+ts = ts[ts .< tend2]
+L = 1:length(ts[ts .< tend1])
+Ltest = L[end]+1:length(ts)
+
+@assert length(L) + length(Ltest) == length(ts)
+
+# chop things nicely
+Xtest = X[Ltest, :]
+dXtest = dX[Ltest, :]
+X = X[L,:]
+dX = dX[L,:]
+
 
 
 # 9. Compute model matrix via least squares
@@ -151,7 +171,7 @@ B = Ξ[:, r-n_control+1:end]      # Control matrix B
 # 10. visualize matrices
 p1 = heatmap(A, yflip=true, xlabel="A", ylabel="", showaxis=false,link=:y, cbar=false,clims=(minimum(A), maximum(A)), leftmargin=0*Plots.mm,rightmargin=0*Plots.mm)
 p2 = heatmap(B, yflip=true, xlabel="B", ylabel="", showaxis=false, link=:y, clims=(minimum(A),maximum(A)), color=:inferno,rightmargin=10*Plots.mm, leftmargin=0*Plots.mm)
-plot(p1, p2, layout = @layout([a{0.7w} b{0.3w} ]))
+plot(p1, p2, layout = @layout([a{0.75w} b{0.25w} ]))
 
 savefig("figures/sharedair/havok/heatmap.png")
 savefig("figures/sharedair/havok/heatmap.pdf")
@@ -183,24 +203,16 @@ savefig("figures/sharedair/havok/eigenmodes.pdf")
 
 
 # 12. define interpolation function for forcing coordinate(s)
-# +3 because of offset from derivative...
-ts = range(dt*(Nwindow+3), step=dt, length=size(X,1))
-
-#itps = [CubicSpline(X[:,j], ts) for j ∈ r-n_control+1:r]
-itps = [DataInterpolations.LinearInterpolation(X[:,j], ts) for j ∈ r-n_control+1:r]
+#     +3 because of offset from derivative...
+itps = [DataInterpolations.LinearInterpolation(Vr[3:end-3,j], ts) for j ∈ r-n_control+1:r]
 u(t) = [itp(t) for itp ∈ itps]
-
-#xᵣ = CubicSpline(X[:,end], ts)
-#xᵣ = linear_interpolation(Float64.(ts), X[:, r-n_control+1:end])
-
-# xᵣ(ts[1])
 
 
 # 13. visualize first embedding coordinate + the forcing term
-xs = u.(ts)
+xs = u.(ts[L])
 p1 = plot(
-    ts[1:Nmax] ./ (60^2),
-    X[1:Nmax,1],
+    ts[L] ./ (60^2),
+    X[L,1],
     xlabel="",
     ylabel="v₁",
     label=""
@@ -209,15 +221,19 @@ p1 = plot(
 p2  = plot()
 for j ∈ 1:1
     plot!(
-        ts[1:Nmax] ./ (60^2),
-        map(x->x[j]^2, xs[1:Nmax]),
+        ts[L] ./ (60^2),
+        map(x->x[j]^2, xs),
         ylabel="vᵣ²",
         xlabel="time",
         label="",
         color=:red,
         link=:x,
-        grid=false,
-        minorgrid=false,
+#        grid=false,
+        #        minorgrid=false,
+        ygrid=false,
+        yminorgrid=false,
+        xgrid=true,
+        xminorgrid=true,
         yticks=[0.0]
     )
 end
@@ -234,12 +250,9 @@ savefig("figures/sharedair/havok/v1_with_forcing.pdf")
 
 
 
-
-
 # 14. Integrate model forward in time
 sA = @SMatrix[A[i,j] for i ∈ axes(A,1), j ∈ axes(A,2)]
 sB = @SMatrix[B[i,j] for i ∈ axes(B,1), j ∈ axes(B,2)]
-#sB = @SVector[b for b ∈ B'] # j ∈ axes(B,2)]
 
 
 # define function and integrate to get model predictions
@@ -258,93 +271,95 @@ dx = copy(x₀)
 @benchmark f!(dx, x₀, params, ts[1])
 
 
-
+# integrate over all times so we have model predictions on holdout data
 prob = ODEProblem(f!, x₀, (ts[1], ts[end]), params)
 sol = solve(prob, saveat=ts)# , abstol=1e-12, reltol=1e-12);
 size(sol)
 
+# split up solutions
+X̂ = sol[:,L]'
+X̂test = sol[:,Ltest]'
+
 
 # 15. visualize results
-offset = 1
-#offset = Ntrain - 10000
-Nmax = 10000
+Nmax=50000
 p1 = plot(
-    ts[offset:offset+Nmax] ./ (60^2),
-    X[offset:offset+Nmax, 1],
-    # xlabel="time (hours)",
+    ts[L[1:Nmax]] ./ (60^2),
+    X[L[1:Nmax],1],
+    xlabel="time",
     ylabel="v₁",
     label="embedding",
-    lw=2,
-    legend=:topright
+    lw=2
 )
-
 
 plot!(
-    sol.t[offset:offset+Nmax] ./ (60^2),
-    sol[1,offset:offset+Nmax],
+    ts[L[1:Nmax]] ./ (60^2),
+    X̂[L[1:Nmax],1],
     label="fit",
-    ls=:dot,
-    lw=2,
+    # ls=:dot,
+    alpha=0.5,
+    lw=2
 )
-
 
 p2 = plot(
-    ts[offset:offset+Nmax] ./ (60^2),
-    X[offset:offset+Nmax, 2],
-    # xlabel="time (hours)",
-    ylabel="v₂",
+    ts[L[1:Nmax]] ./ (60^2),
+    X[L[1:Nmax],2],
+    xlabel="time",
+    ylabel="v₁",
     label="embedding",
-    lw=2,
-    legend=:topright,
-    link=:x,
-)
-
-
-plot!(
-    sol.t[offset:offset+Nmax] ./ (60^2),
-    sol[2,offset:offset+Nmax],
-    label="fit",
-    ls=:dot,
     lw=2
 )
 
+plot!(
+    ts[L[1:Nmax]] ./ (60^2),
+    X̂[L[1:Nmax],2],
+    label="fit",
+    # ls=:dot,
+    alpha=0.5,
+    lw=2
+)
 
 p3 = plot(
-    ts[offset:offset+Nmax] ./ (60^2),
-    X[offset:offset+Nmax, 3],
-    xlabel="time (hours)",
-    ylabel="v₃",
+    ts[L[1:Nmax]] ./ (60^2),
+    X[L[1:Nmax],3],
+    xlabel="time",
+    ylabel="v₁",
     label="embedding",
-    lw=2,
-    legend=:topright,
-    link=:x
-)
-
-
-plot!(
-    sol.t[offset:offset+Nmax] ./ (60^2),
-    sol[3,offset:offset+Nmax],
-    label="fit",
-    ls=:dot,
     lw=2
 )
 
-plot(p1, p2, p3, layout=(3,1), size=(1600, 1000), margin=5*Plots.mm)
+plot!(
+    ts[L[1:Nmax]] ./ (60^2),
+    X̂[L[1:Nmax],3],
+    label="fit",
+    # ls=:dot,
+    alpha=0.5,
+    lw=2
+)
 
 
-savefig("figures/sharedair/havok/timeseries_reconstructed.png")
-savefig("figures/sharedair/havok/timeseries_reconstructed.pdf")
+plot(p1, p2, p3, layout=(3,1), size=(1600, 1000), margin=5*Plots.mm,
+     plot_title= "r=$(r-n_control+1), n_control=$(n_control)"
+     )
 
+println(r-n_control+1)
+savefig("figures/sharedair/havok/timeseries_reconstructed__r-18__c-10.png")
+savefig("figures/sharedair/havok/timeseries_reconstructed__r-18__c-10.pdf")
+
+
+xlims!(0, 2.5)
+savefig("figures/sharedair/havok/timeseries_reconstructed_zoomed-in.png")
+savefig("figures/sharedair/havok/timeseries_reconstructed_zoomed-in.pdf")
 
 
 # 16. visualize the fitted attractor:
 Nmax = 15000
 p1 = scatter(
-    sol[1,1:Nmax], sol[2, 1:Nmax], sol[3, 1:Nmax],
+    X̂[L[1:Nmax],1], X̂[L[1:Nmax],2], X̂[L[1:Nmax],3],
     ms=2,
     msw=0,
     msa=0,
-    marker_z = sol.t[1:Nmax],
+    marker_z = ts[L[1:Nmax]],
     frame=:none,
     ticks=nothing,
     xlabel="",
@@ -360,30 +375,39 @@ savefig("figures/sharedair/havok/attractor_reconstructed.png")
 savefig("figures/sharedair/havok/attractor_reconstructed.pdf")
 
 
-train_shift = 30000
 # 17. scatter plot and quantile quantile of fit
+
+# p1 = scatterresult(
+#     X[:,1], X̂[:,1],
+#     Xtest[:,1], X̂test[:, 1],
+#     xlabel="True v₁",
+#     ylabel="Predicted v₁",
+#     plot_title="HAVOK Fit for v₁",
+# )
+
 p1 = scatterresult(
-    X[1:Nmax,1], sol[1,1:Nmax],
-    X[train_shift+1:train_shift+Nmax,1], sol[1, train_shift+1:train_shift+Nmax],
+    X[L[1:Nmax],1], X̂[L[1:Nmax],1],
+    X[L[Nmax+1001:Nmax+2000],1], X̂[L[Nmax+1001:Nmax+2000],1],
+#    Xtest[:,1], X̂test[:, 1],
     xlabel="True v₁",
     ylabel="Predicted v₁",
     plot_title="HAVOK Fit for v₁",
 )
 
+
 savefig("figures/sharedair/havok/scatterplot.png")
 savefig("figures/sharedair/havok/scatterplot.pdf")
 
+# p1 = quantilequantile(
+#     X[:,1], X̂[:,1],
+#     Xtest[:,1], X̂test[:, 1],
+#     xlabel="True v₁",
+#     ylabel="Predicted v₁",
+#     title="HAVOK Fit for v₁",
+# )
 
-p1 = quantilequantile(
-    X[1:Nmax,1], sol[1,1:Nmax],
-    X[train_shift+1:train_shift+Nmax,1], sol[1, train_shift+1:train_shift+Nmax],
-    xlabel="True v₁",
-    ylabel="Predicted v₁",
-    title="HAVOK Fit for v₁",
-)
-
-savefig("figures/sharedair/havok/quantile-quantile.png")
-savefig("figures/sharedair/havok/quantile-quantile.pdf")
+# savefig("figures/sharedair/havok/quantile-quantile.png")
+# savefig("figures/sharedair/havok/quantile-quantile.pdf")
 
 
 
@@ -392,7 +416,6 @@ savefig("figures/sharedair/havok/quantile-quantile.pdf")
 forcing_pdf = kde(X[:, r-n_control + 1])
 idxs_nozero = forcing_pdf.density .> 0
 gauss = fit(Normal, X[:, r-n_control+1])
-
 plot(gauss, label="gaussian fit", yaxis=:log, ls=:dash)
 plot!(forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], label="pdf")
 ylims!(1e-1, 1e3)
@@ -405,10 +428,277 @@ savefig("figures/sharedair/havok/forcing-stats.pdf")
 
 
 
-# 19. Visualize forcing regimes
-thresh = 4.0e-6
-inds_1 = X[:, r-n_control+1] .^ 2 .> thresh
+# 19. Compute indices where forcing is active
+#thresh = 4.0e-6
+thresh = 2.0e-5
 
-inds_1
+inds = X[:, r-n_control+1] .^ 2 .> thresh
 
-plot(X[1:3*Nmax,r-n_control+3].^2, ylims=(0, 400*median(X[1:3*Nmax, r-n_control+3].^2)))
+
+median(X[:, r-n_control+1] .^ 2)
+mean(X[:, r-n_control+1] .^ 2)
+maximum(X[:, r-n_control+1] .^ 2)
+
+
+Δmax = 10*60
+
+idx_start = []
+idx_end = []
+
+start = 1
+new_hit = 1
+
+while !isnothing(new_hit)
+    push!(idx_start, start)
+
+    endmax = min(start + Δmax, size(X,1)) # 500 must be max window size for forcing
+
+    interval = start:endmax
+    hits = findall(inds[interval])
+    endval = start + hits[end]
+
+    push!(idx_end, endval)
+
+    # if endval + 1 ≥ size(X,1)
+    #     break
+    # end
+
+    # now move to next hit:
+    new_hit = findfirst(inds[endval+1:end])
+
+    if !isnothing(new_hit)
+        start = endval + new_hit
+    end
+end
+
+# set up index dictionaries to make this easier
+forcing_dict = Dict(
+    :on => [idx_start[i]:idx_end[i] for i ∈ 2:length(idx_start)],
+    :off => [idx_end[i]:idx_start[i+1] for i ∈ 2:length(idx_start)-1]
+)
+
+if ts[forcing_dict[:on][1][1]] > ts[1]
+    push!(forcing_dict[:off], 1:forcing_dict[:on][1][1])
+end
+
+
+
+length(forcing_dict[:on])
+length(forcing_dict[:off])
+
+
+# 20. visualize the lobe switching behavior
+tscale = 1/(24*60*60)
+
+p1  = plot()
+# add plots for forcing times
+for idxs ∈ forcing_dict[:on]
+    plot!(
+        p1,
+        ts[idxs] .* tscale,
+        X[idxs,1],
+        xlabel="",
+        ylabel="v₁",
+        label="",
+        color=mints_palette[2],
+    )
+end
+# add plots for linear times
+for idxs ∈ forcing_dict[:off]
+    plot!(
+        p1,
+        ts[idxs] .* tscale,
+        X[idxs,1],
+        xlabel="",
+        ylabel="v₁",
+        label="",
+        color=mints_palette[1],
+    )
+end
+
+# do the same for the forcing
+p2 = plot(
+    link=:x,
+    ygrid=false,
+    yminorgrid=false,
+    xgrid=true,
+    xminorgrid=true,
+    yticks=[0.0]
+)
+
+for idxs ∈ forcing_dict[:on]
+    plot!(
+        p2,
+        ts[idxs] .* tscale,
+        map(x->x[1], xs[idxs]),
+        ylabel="v₁₅",
+        xlabel="time",
+        label="",
+        color=mints_palette[2],
+        lw=1
+    )
+end
+# add plots for linear times
+for idxs ∈ forcing_dict[:off]
+    plot!(
+        p2,
+        ts[idxs] .* tscale,
+        map(x->x[1], xs[idxs]),
+        ylabel="v₁₅",
+        xlabel="time",
+        label="",
+        color=mints_palette[1],
+        lw = 1
+    )
+end
+
+l = @layout [
+    a{0.8h}
+    b
+]
+plot(p1, p2, layout=l)
+
+xlims!(0, 2)
+
+savefig("figures/sharedair/havok/v1_forcing_identified.png")
+savefig("figures/sharedair/havok/v1_forcing_identified.pdf")
+
+
+
+
+# 21. Color-code attractor by forcing
+p1 = plot(
+    frame=:semi,
+    ticks=nothing,
+    xlabel="x",
+    ylabel="y",
+    zlabel="z",
+    cbar=false,
+    margins=0*Plots.mm,
+    background_color=:transparent,
+    title="Attractor with Intermittent Forcing",
+)
+
+i = 1
+for idxs ∈ forcing_dict[:on]
+    if i == 1
+        label="active forcing"
+    else
+        label=""
+    end
+
+    plot!(
+        p1,
+        X[idxs,1], X[idxs,2], X[idxs,3],
+        color=mints_palette[2],
+        label=label,
+        lw=1
+    )
+    i+=1
+end
+
+# add plots for linear times
+i=1
+for idxs ∈ forcing_dict[:off]
+    if i == 1
+        label="approximately linear"
+    else
+        label=""
+    end
+
+    plot!(
+        p1,
+        X[idxs,1], X[idxs,2], X[idxs,3],
+        color=mints_palette[1],
+        label=label,
+        lw=1
+    )
+    i+=1
+end
+
+display(p1)
+
+savefig("figures/sharedair/havok/attractor_w_forcing.png")
+savefig("figures/sharedair/havok/attractor_w_forcing.pdf")
+
+
+
+
+# 22. add thresholding to original timeseries data
+p1  = plot()
+# add plots for forcing times
+for idxs ∈ forcing_dict[:on]
+    plot!(
+        p1,
+        ts[idxs] .* tscale,
+        Data[3 .+ idxs],
+        xlabel="",
+        ylabel="PM 2.5 [μg/m^3]",
+        label="",
+        color=mints_palette[2],
+    )
+end
+# add plots for linear times
+for idxs ∈ forcing_dict[:off]
+    plot!(
+        p1,
+        ts[idxs] .* tscale,
+        Data[3 .+ idxs],
+        xlabel="",
+        ylabel="v₁",
+        label="",
+        color=mints_palette[1],
+    )
+end
+
+# do the same for the forcing
+p2 = plot(
+    link=:x,
+    ygrid=false,
+    yminorgrid=false,
+    xgrid=true,
+    xminorgrid=true,
+    yticks=[0.0]
+)
+
+for idxs ∈ forcing_dict[:on]
+    plot!(
+        p2,
+        ts[idxs] .* tscale,
+        map(x->x[1], xs[idxs]),
+        ylabel="v₁₅",
+        xlabel="time",
+        label="",
+        color=mints_palette[2],
+        lw=1
+    )
+end
+# add plots for linear times
+for idxs ∈ forcing_dict[:off]
+    plot!(
+        p2,
+        ts[idxs] .* tscale,
+        map(x->x[1], xs[idxs]),
+        ylabel="v₁₅",
+        xlabel="time",
+        label="",
+        color=mints_palette[1],
+        lw = 1
+    )
+end
+
+l = @layout [
+    a{0.8h}
+    b
+]
+plot(p1, p2, layout=l)
+
+xlims!(0, 0.4)
+
+savefig("figures/sharedair/havok/v1_forcing_identified.png")
+savefig("figures/sharedair/havok/v1_forcing_identified.pdf")
+
+
+# NOTE: need to think about how to visualize thresholding when B is a matrix and u(t) is a vector
+#       perhaps just use the norm ||u(t)||^2 for the value we want to threshold
+#       would also be interesting to look at the phase of the correction (perhaps a polar plot?)

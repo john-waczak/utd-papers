@@ -109,7 +109,24 @@ end
 X = @view Vr[3:end-3, :]
 dX = @view dVr[:,:]
 
+ts = range(3*dt, step=dt, length=size(dVr,1))
+
+# chop off final 1000 points for prediction
+n_test_points = 10000
+Xtest = X[end-n_test_points+1:end, :]
+dXtest = dX[end-n_test_points+1:end, :]
+
+X = X[1:end-n_test_points,:]
+dX = dX[1:end-n_test_points,:]
+
+L = 1:size(X,1)
+Ltest = size(X,1)+1:size(X,1)+n_test_points
+
 @assert size(X,2) == size(dX,2)  + 1
+size(X)
+size(dX)
+
+
 
 # 9. compute matrix such that dX = XΞ'
 Ξ = (X\dX)'  # now Ξx = dx for a single column vector view
@@ -144,13 +161,14 @@ savefig("figures/lorenz/havok/eigenmodes.png")
 savefig("figures/lorenz/havok/eigenmodes.pdf")
 
 
-# define interpolation function for forcing coordinate
-ts = range(dt, step=dt, length=size(X,1))
-itps = [DataInterpolations.LinearInterpolation(X[:,j], ts) for j ∈ r-n_control+1:r]
+# 12. define interpolation function for forcing coordinate
+# fit these on the full Vr matrix so we get all the times for predictions on test points
+
+itps = [DataInterpolations.LinearInterpolation(Vr[3:end-3,j], ts) for j ∈ r-n_control+1:r]
 u(t) = [itp(t) for itp ∈ itps]
 
 # 13. visualize first embedding coordinate that we want to fit:
-xs = u.(ts)
+xs = u.(ts[L])
 
 p1 = plot(
     ts[1:Nmax],
@@ -168,9 +186,14 @@ p2 = plot(
     label="",
     color=:red,
     link=:x,
-    grid=false,
-    minorgrid=false,
-    yticks=[0.0, 0.0005]
+#    grid=false,
+#    minorgrid=false,
+    ygrid=false,
+    yminorgrid=false,
+    xgrid=true,
+    xminorgrid=true,
+    yticks=[0.0],
+    lw=1,
 )
 
 l = @layout [
@@ -202,30 +225,30 @@ dx = copy(x₀)
 
 prob = ODEProblem(f!, x₀, (ts[1], ts[end]), params)
 sol = solve(prob, saveat=ts);
+
 size(sol)
+X̂ = sol[:,L]'
+X̂test = sol[:,Ltest]'
 
 # 15. visualize results
-L = 300:25000
-
 p1 = plot(
     tspan[L],
-    X[L],
+    X[:,1],
     xlabel="time",
     ylabel="v₁",
     label="embedding",
     lw=2
 )
 
-
 plot!(
-    sol.t[L],
-    sol[1,L],
+    ts[L],
+    X̂[:,1],
     label="fit",
     ls=:dot,
     lw=2
 )
 
-
+xlims!(0, 50)
 savefig("figures/lorenz/havok/timeseries_reconstructed.png")
 savefig("figures/lorenz/havok/timeseries_reconstructed.pdf")
 
@@ -233,11 +256,11 @@ savefig("figures/lorenz/havok/timeseries_reconstructed.pdf")
 
 # 16. visualize the fitted attractor:
 p1 = scatter(
-    sol[1,L], sol[2, L], sol[3, L],
+    X̂[:,1], X̂[:,2], X̂[:,3],
     ms=2,
     msw=0,
     msa=0,
-    marker_z = sol.t[L],
+    marker_z = ts[L],
     frame=:none,
     ticks=nothing,
     xlabel="",
@@ -253,28 +276,11 @@ savefig("figures/lorenz/havok/attractor_reconstructed.png")
 savefig("figures/lorenz/havok/attractor_reconstructed.pdf")
 
 
-
-# 18. Statistics of forcing function
-
-forcing_pdf = kde(X[:, r-n_control + 1])
-idxs_nozero = forcing_pdf.density .> 0
-gauss = fit(Normal, X[:, r-n_control+1])
-
-plot(gauss, label="gaussian fit", yaxis=:log, ls=:dash)
-plot!(forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], label="pdf")
-ylims!(1e-1, 1e3)
-xlims!(-0.01, 0.01)
-xlabel!("vᵣ")
-title!("Forcing Statistics")
-
-savefig("figures/lorenz/havok/forcing-stats.png")
-savefig("figures/lorenz/havok/forcing-stats.pdf")
-
-Lshifted = L .+ 10000
 # 17. scatter plot and quantile quantile of fit
+
 p1 = scatterresult(
-    X[L,1], sol[1,L],
-    X[Lshifted,1], sol[1, Lshifted],
+    X[:,1], X̂[:,1],
+    Xtest[:,1], X̂test[:, 1],
     xlabel="True v₁",
     ylabel="Predicted v₁",
     plot_title="HAVOK Fit for v₁",
@@ -283,10 +289,9 @@ p1 = scatterresult(
 savefig("figures/lorenz/havok/scatterplot.png")
 savefig("figures/lorenz/havok/scatterplot.pdf")
 
-
 p1 = quantilequantile(
-    X[1:Nmax,1], sol[1,1:Nmax],
-    X[train_shift+1:train_shift+Nmax,1], sol[1, train_shift+1:train_shift+Nmax],
+    X[:,1], X̂[:,1],
+    Xtest[:,1], X̂test[:, 1],
     xlabel="True v₁",
     ylabel="Predicted v₁",
     title="HAVOK Fit for v₁",
@@ -297,9 +302,7 @@ savefig("figures/lorenz/havok/quantile-quantile.pdf")
 
 
 
-
 # 18. Statistics of forcing function
-
 forcing_pdf = kde(X[:, r-n_control + 1])
 idxs_nozero = forcing_pdf.density .> 0
 gauss = fit(Normal, X[:, r-n_control+1])
@@ -313,8 +316,6 @@ title!("Forcing Statistics")
 
 savefig("figures/lorenz/havok/forcing-stats.png")
 savefig("figures/lorenz/havok/forcing-stats.pdf")
-
-
 
 
 # 19. Compute indices where forcing is active
@@ -395,8 +396,10 @@ end
 # do the same for the forcing
 p2 = plot(
     link=:x,
-    grid=false,
-    minorgrid=false,
+    ygrid=false,
+    yminorgrid=false,
+    xgrid=true,
+    xminorgrid=true,
     yticks=[0.0]
 )
 
@@ -409,6 +412,7 @@ for idxs ∈ forcing_dict[:on]
         xlabel="time",
         label="",
         color=mints_palette[2],
+        lw=1
     )
 end
 # add plots for linear times
@@ -421,6 +425,7 @@ for idxs ∈ forcing_dict[:off]
         xlabel="time",
         label="",
         color=mints_palette[1],
+        lw = 1
     )
 end
 
@@ -472,4 +477,29 @@ display(p1)
 
 savefig("figures/lorenz/havok/attractor_w_forcing.png")
 savefig("figures/lorenz/havok/attractor_w_forcing.pdf")
+
+
+# 22. Plot time series predictions on test data
+p1 = plot(
+    tspan[Ltest],
+    Xtest[:,1],
+    xlabel="time",
+    ylabel="v₁",
+    label="embedding",
+    lw=2
+)
+
+plot!(
+    ts[Ltest],
+    X̂test[:,1],
+    label="fit",
+    ls=:dot,
+    lw=2
+)
+
+title!("Predictions for Test Data")
+
+savefig("figures/lorenz/havok/timeseries_test_points.png")
+savefig("figures/lorenz/havok/timeseries_test_points.pdf")
+
 
