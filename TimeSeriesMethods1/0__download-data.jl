@@ -2,10 +2,10 @@ using Distributed, ClusterManagers
 
 if "SLURM_JOBID" ∈ keys(ENV)
     @info "Working on a slurm cluster"
-    addprocs_slurm(parse(Int, ENV["SLURM_NTASKS"])-1, exeflags="--project=$(Base.active_project())")
+    addprocs_slurm(parse(Int, ENV["SLURM_NTASKS"])-1)
 else
     @info "Working locally"
-    addprocs(Threads.nthreads(), exeflags="--project=$(Base.active_project())")
+    addprocs(Threads.nthreads())
 end
 
 
@@ -15,6 +15,7 @@ end
 # add relevant packages
 @everywhere begin
     using Pkg
+    Pkg.activate(".")
     Pkg.instantiate()
     Pkg.precompile()
 
