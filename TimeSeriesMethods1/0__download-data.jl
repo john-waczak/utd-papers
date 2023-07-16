@@ -2,10 +2,10 @@ using Distributed, ClusterManagers
 
 if "SLURM_JOBID" ∈ keys(ENV)
     @info "Working on a slurm cluster"
-    addprocs_slurm(parse(Int, ENV["SLURM_NTASKS"])-1)
+    addprocs_slurm(parse(Int, ENV["SLURM_NTASKS"])-1, exeflags="--project=.")
 else
     @info "Working locally"
-    addprocs(Threads.nthreads())
+    addprocs(Threads.nthreads(), exeflags="--project=.")
 end
 
 
@@ -18,6 +18,7 @@ end
     Pkg.instantiate()
     Pkg.precompile()
 
+    using Distributed
     using CSV
     using ProgressMeter
 
