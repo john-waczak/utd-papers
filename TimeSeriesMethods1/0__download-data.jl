@@ -1,8 +1,8 @@
-using Distributed, SlurmClusterManager
+using Distributed, ClusterManagers
 
 if "SLURM_JOBID" ∈ keys(ENV)
     @info "Working on a slurm cluster"
-    addprocs(SlurmManager())
+    addprocs_slurm(parse(Int, ENV["SLURM_NTASKS"])-1)
 else
     @info "Working locally"
     addprocs(Threads.nthreads())
