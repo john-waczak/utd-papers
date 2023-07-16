@@ -2,10 +2,10 @@ using Distributed, ClusterManagers
 
 if "SLURM_JOBID" ∈ keys(ENV)
     @info "Working on a slurm cluster"
-    addprocs_slurm(parse(Int, ENV["SLURM_NTASKS"])-1)
+    addprocs_slurm(parse(Int, ENV["SLURM_NTASKS"])-1, exeflags="--project=$(Base.active_project())")
 else
     @info "Working locally"
-    addprocs(Threads.nthreads())
+    addprocs(Threads.nthreads(), exeflags="--project=$(Base.active_project())")
 end
 
 
@@ -16,6 +16,7 @@ end
 @everywhere begin
     using Pkg
     println("Activating Environment")
+    println(Pkg.status())
     Pkg.activate(".")
     println("Instantiating")
     Pkg.instantiate()
@@ -27,15 +28,19 @@ end
     using CSV
     using ProgressMeter
 
-    # set up data directory
-    outpath = "data/sharedair/raw"
+    println("Finished Importing...")
 end
 
 
+outpath = "data/sharedair/raw"
 
+println("Data output path: ", outpath)
 if !ispath(outpath)
+    println("Creating output directory")
     mkpath(outpath)
 end
+
+@everywhere outpath = "data/sharedair/raw"
 
 
 @everywhere begin
@@ -48,13 +53,18 @@ end
     # configure AWS.jl to use our OSN configuration
     AWS.global_aws_config(AnonymousOSN(endpoint))
 
-    nodes_to_use = ["Central_Hub_1", "Central_Hub_2", "Central_Hub_4"]
-    years_to_use = ["2022", "2023"]
-    months = [lpad(i, 2, "0") for i ∈ 1:12]
-    days = [lpad(i, 2, "0") for i ∈ 1:31]
-    sensors_to_use = ["IPS7100", "BME680"]
 end
 
+
+
+
+nodes_to_use = ["Central_Hub_1", "Central_Hub_2", "Central_Hub_4"]
+years_to_use = ["2022", "2023"]
+months = [lpad(i, 2, "0") for i ∈ 1:12]
+days = [lpad(i, 2, "0") for i ∈ 1:31]
+sensors_to_use = ["IPS7100", "BME680"]
+
+@everywhere sensors_to_use = ["IPS7100", "BME680"]
 
 for node ∈ nodes_to_use
   for sensor ∈ sensors_to_use
@@ -100,25 +110,6 @@ end
     end
 end
 
-
-# @showprogress pmap(1:6) do x
-#     sleep(5)
-#     x^2
-# end
-
-
-# pmap([(i, j) for i ∈ 1:3 for j ∈ 1:5]) do (i,j)
-#     println(i*j)
-# end
-
-
-
-
-# loop over node, year, month, day and
-# 1. fetch the files matching sensor_list
-# 2. download and place in data directory
-
-
 flist = [(node, year, month, day) for node ∈ nodes_to_use for year ∈ years_to_use for month ∈ months for day ∈ days]
 
 @showprogress pmap(flist) do (node, year, month, day)
@@ -130,17 +121,3 @@ flist = [(node, year, month, day) for node ∈ nodes_to_use for year ∈ years_t
     process_paths(ptuples, outpath)
 end
 
-
-# # task 1: for each month, walk directories and generate file lists. Afterwards, fetch and join results into single file list
-
-# add1(value) = value + 1
-# add2(value) = value + 2
-# combine(a...) = sum(a)
-
-# res1 = [Dagger.@spawn add1(i) for i ∈ 1:10]
-# res = Dagger.@spawn combine(res1...)
-# fetch(res)
-
-# [i*j for i ∈ 1:3 for j∈1:5]
-
-# [S3Path(joinpath(bucket, "AirQualityNetwork/data/raw", node, year, month, day*"/")) for node ∈]
