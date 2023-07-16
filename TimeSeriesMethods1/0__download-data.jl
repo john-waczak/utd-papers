@@ -15,10 +15,14 @@ end
 # add relevant packages
 @everywhere begin
     using Pkg
+    println("Activating Environment")
     Pkg.activate(".")
+    println("Instantiating")
     Pkg.instantiate()
+    println("Precompiling")
     Pkg.precompile()
 
+    println("Importing Packages")
     using Distributed
     using CSV
     using ProgressMeter
