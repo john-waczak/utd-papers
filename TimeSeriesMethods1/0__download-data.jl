@@ -25,7 +25,7 @@ end
 
     println("Importing Packages")
     using Distributed
-    using CSV
+    using CSV, DataFrame
     using ProgressMeter
 
     println("Finished Importing...")
@@ -46,6 +46,7 @@ end
 @everywhere begin
     # load in functionality for AWSS3
     include("utils/osn_anonymous.jl")
+    include("utils/df_utils.jl")
 
     endpoint = "https://ncsa.osn.xsede.org"
     bucket = "s3://ees230012-bucket01"
@@ -104,8 +105,14 @@ end
             # download the file to our desired output directory
             # csv = Dagger.@spawn CSV.File(path)
             # Dagger.@spawn CSV.write(joinpath(outpath, node, sensor, fname), csv)
-            csv = CSV.File(path)
-            CSV.write(joinpath(outpath, node, sensor, fname), csv)
+            df = CSV.File(path) |> DataFrame
+
+            # add a column with dateTime in UTC zone
+            df.dateTime = date2datetime.(df.dateTime)
+            df.date = Date.(df.dateTime)
+            df.date_and_hour = Dates.format.(df.dateTime, dateformat"yyyy-mm-ddTHH")
+
+            CSV.write(joinpath(outpath, node, sensor, fname), df)
         end
     end
 end
