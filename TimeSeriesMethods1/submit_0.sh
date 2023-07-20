@@ -3,7 +3,7 @@
 #SBATCH     --job-name=0__download-data
 #SBATCH     --output=0__download-data.out
 #SBATCH     --error=0__download-data.err
-#SBATCH     --ntasks=64
+#SBATCH     --ntasks=128
 #SBATCH     --cpus-per-task=1  # number of threads for multi-threading
 ##SBATCH     --mem-per-cpu=2G
 #SBATCH     --mem=0  # use all memory on node
