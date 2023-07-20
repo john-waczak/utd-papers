@@ -1,3 +1,6 @@
+# include("utils/df_utils.jl")
+# date2datetime("2022-08-09 15:21:01.786747")
+
 using Distributed, ClusterManagers
 
 if "SLURM_JOBID" ∈ keys(ENV)
@@ -102,17 +105,26 @@ end
             node = splitpath[7]
             fname = splitpath[end]
 
-            # download the file to our desired output directory
-            # csv = Dagger.@spawn CSV.File(path)
-            # Dagger.@spawn CSV.write(joinpath(outpath, node, sensor, fname), csv)
-            df = CSV.File(path) |> DataFrame
 
-            # add a column with dateTime in UTC zone
-            df.dateTime = date2datetime.(df.dateTime)
-            df.date = Date.(df.dateTime)
-            df.date_and_hour = Dates.format.(df.dateTime, dateformat"yyyy-mm-ddTHH")
+            try
+                # download the file to our desired output directory
+                # csv = Dagger.@spawn CSV.File(path)
+                # Dagger.@spawn CSV.write(joinpath(outpath, node, sensor, fname), csv)
+                df = CSV.File(path, silencewarnings=true) |> DataFrame
+                dropmissing!(df)
 
-            CSV.write(joinpath(outpath, node, sensor, fname), df)
+                # add a column with dateTime in UTC zone
+                #df.dateTime = date2datetime.(df.dateTime)
+                add_datetime_to_df!(df)
+                df.date = Date.(df.dateTime)
+                df.date_and_hour = Dates.format.(df.dateTime, dateformat"yyyy-mm-ddTHH")
+
+
+                CSV.write(joinpath(outpath, node, sensor, fname), df)
+            catch e
+                println(fname, " failed!")
+                println(e)
+            end
         end
     end
 end
